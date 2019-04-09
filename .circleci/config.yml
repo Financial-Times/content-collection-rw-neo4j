@@ -3,11 +3,12 @@ jobs:
   build:
     docker:
       - image: circleci/golang:1.8
-      - image: neo4j:3.1.0-enterprise
+      - image: neo4j:3.4.10-enterprise
         environment:
           NEO4J_AUTH: none
           NEO4J_HEAP_MEMORY: 256
           NEO4J_CACHE_MEMORY: 256M
+          NEO4J_ACCEPT_LICENSE_AGREEMENT: yes
 
     working_directory: /go/src/github.com/Financial-Times/content-collection-rw-neo4j
     environment:
