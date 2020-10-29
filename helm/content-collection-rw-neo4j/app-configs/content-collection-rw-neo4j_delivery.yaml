@@ -1,8 +1,0 @@
-# Values used for the deployed application.
-replicaCount: 2
-service:
-  name: content-collection-rw-neo4j
-env:
-  APP_SYSTEM_CODE: "upp-content-collection-rw-neo4j"
-  APP_NAME: "Content Collection RW Neo4j"
-  CACHE_DURATION: "30s"
