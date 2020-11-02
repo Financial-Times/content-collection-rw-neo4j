@@ -4,7 +4,6 @@
 service:
   name: "" # The name of the service, should be defined in the specific app-configs folder.
   hasHealthcheck: "true"
-eksCluster: false
 image:
   repository: coco/content-collection-rw-neo4j
   pullPolicy: IfNotPresent
