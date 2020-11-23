@@ -179,18 +179,30 @@ func (pcd service) Delete(uuid string, transID string) (bool, error) {
 		queries = append(queries, removeExtraRelationships)
 	}
 
-	removeNode := &neoism.CypherQuery{
-		Statement: `MATCH (cc:Thing {uuid: {uuid}}) DELETE cc`,
+	removeLabel := &neoism.CypherQuery{
+		Statement: `MATCH (cc:Thing {uuid: {uuid}})
+			REMOVE cc:ContentCollection`,
+		Parameters: map[string]interface{}{
+			"uuid": uuid,
+		},
+	}
+
+	deleteNode := &neoism.CypherQuery{
+		Statement: `MATCH (cc:Thing {uuid: {uuid}})
+			OPTIONAL MATCH (cc)-[rel]-()
+			WITH cc, count(rel) AS relCount
+			WHERE relCount = 0
+			DELETE cc`,
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
 		IncludeStats: true,
 	}
-	queries = append(queries, removeNode)
+	queries = append(queries, removeLabel, deleteNode)
 
 	_ = pcd.conn.CypherBatch(queries)
 
-	s1, err := removeNode.Stats()
+	s1, err := deleteNode.Stats()
 	if err != nil {
 		return false, err
 	}

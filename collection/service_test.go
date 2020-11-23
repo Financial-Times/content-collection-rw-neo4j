@@ -2,70 +2,95 @@ package collection
 
 import (
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"testing"
 )
 
 var (
-	uuid              = "sp-12345"
-	labels            = []string{"Curation", "StoryPackage"}
-	relation          = "SELECTS"
-	extraRelForDelete = "IS_CURTATED_FOR"
+	ccUUID            = "cc-12345"
+	cpLabels          = []string{}
+	cpRelation        = "CONTAINS"
+	spLabels          = []string{"Curation", "StoryPackage"}
+	spRelation        = "SELECTS"
+	extraRelForDelete = "IS_CURATED_FOR"
 	extraRelThingUUID = "t-12345"
 )
 
 func TestWrite(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, labels, relation, "")
+	testService := getContentCollectionService(db, spLabels, spRelation, "")
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid, "tID")
+	result, found, err := testService.Read(ccUUID, "tID")
 	validateResult(assert, result, found, err, 2)
 }
 
 func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, labels, relation, "")
+	testService := getContentCollectionService(db, spLabels, spRelation, "")
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid, "tID")
+	result, found, err := testService.Read(ccUUID, "tID")
 	validateResult(assert, result, found, err, 2)
 
 	err = testService.Write(createContentCollection(3), "tID")
 	assert.NoError(err)
 
-	result, found, err = testService.Read(uuid, "tID")
+	result, found, err = testService.Read(ccUUID, "tID")
 	validateResult(assert, result, found, err, 3)
 }
 
-func TestDelete(t *testing.T) {
+func TestDeleteSP(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, labels, relation, "")
+	testService := getContentCollectionService(db, spLabels, spRelation, "")
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid, "tID")
+	result, found, err := testService.Read(ccUUID, "tID")
 	validateResult(assert, result, found, err, 2)
 
-	deleted, err := testService.Delete(uuid, "tID")
+	deleted, err := testService.Delete(ccUUID, "tID")
 	assert.NoError(err)
 	assert.Equal(true, deleted)
 
-	result, found, err = testService.Read(uuid, "tID")
+	result, found, err = testService.Read(ccUUID, "tID")
+	assert.NoError(err)
+	assert.False(found)
+	assert.Equal(contentCollection{}, result)
+}
+
+func TestDeleteCP(t *testing.T) {
+	assert := assert.New(t)
+	db := getDatabaseConnectionAndCheckClean(t, assert)
+	testService := getContentCollectionService(db, cpLabels, cpRelation, "")
+	defer cleanDB(db, assert)
+
+	err := testService.Write(createContentCollection(2), "tID")
+	assert.NoError(err)
+
+	result, found, err := testService.Read(ccUUID, "tID")
+	validateResult(assert, result, found, err, 2)
+
+	deleted, err := testService.Delete(ccUUID, "tID")
+	assert.NoError(err)
+	assert.Equal(true, deleted)
+
+	result, found, err = testService.Read(ccUUID, "tID")
 	assert.NoError(err)
 	assert.False(found)
 	assert.Equal(contentCollection{}, result)
@@ -74,28 +99,28 @@ func TestDelete(t *testing.T) {
 func TestDeleteWithExtraRelation(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testServiceNoExtraRelHandle := getContentCollectionService(db, labels, relation, "")
-	testServiceExtraRelHandle := getContentCollectionService(db, labels, relation, extraRelForDelete)
+	testServiceNoExtraRelHandle := getContentCollectionService(db, spLabels, spRelation, "")
+	testServiceExtraRelHandle := getContentCollectionService(db, spLabels, spRelation, extraRelForDelete)
 	defer cleanDB(db, assert)
 
 	err := testServiceNoExtraRelHandle.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testServiceNoExtraRelHandle.Read(uuid, "tID")
+	result, found, err := testServiceNoExtraRelHandle.Read(ccUUID, "tID")
 	validateResult(assert, result, found, err, 2)
 
-	err = createExtraRelation(db, uuid)
+	err = createExtraRelation(db, ccUUID)
 	assert.NoError(err)
 
-	deleted, err := testServiceNoExtraRelHandle.Delete(uuid, "tID")
+	deleted, err := testServiceNoExtraRelHandle.Delete(ccUUID, "tID")
+	assert.NoError(err)
 	assert.Equal(false, deleted)
-	assert.Error(err)
 
-	deleted, err = testServiceExtraRelHandle.Delete(uuid, "tID")
+	deleted, err = testServiceExtraRelHandle.Delete(ccUUID, "tID")
 	assert.NoError(err)
 	assert.Equal(true, deleted)
 
-	result, found, err = testServiceNoExtraRelHandle.Read(uuid, "tID")
+	result, found, err = testServiceNoExtraRelHandle.Read(ccUUID, "tID")
 	assert.NoError(err)
 	assert.False(found)
 	assert.Equal(contentCollection{}, result)
@@ -108,7 +133,7 @@ func createContentCollection(itemCount int) contentCollection {
 	}
 
 	c := contentCollection{
-		UUID:             uuid,
+		UUID:             ccUUID,
 		PublishReference: "test12345",
 		LastModified:     "2016-08-25T06:06:23.532Z",
 		Items:            items,
@@ -122,7 +147,7 @@ func validateResult(assert *assert.Assertions, result interface{}, found bool, e
 	assert.True(found)
 
 	collection := result.(contentCollection)
-	assert.Equal(uuid, collection.UUID)
+	assert.Equal(ccUUID, collection.UUID)
 	assert.Equal(itemCount, len(collection.Items))
 }
 
@@ -149,10 +174,18 @@ func getDatabaseConnection(assert *assert.Assertions) neoutils.NeoConnection {
 func cleanDB(db neoutils.CypherRunner, assert *assert.Assertions) {
 	qs := []*neoism.CypherQuery{
 		{
-			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", uuid),
+			Statement: `MATCH (mc:Thing {uuid: {uuid}})
+			DETACH DELETE mc`,
+			Parameters: map[string]interface{}{
+				"uuid": ccUUID,
+			},
 		},
 		{
-			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", extraRelThingUUID),
+			Statement: `MATCH (mc:Thing {uuid: {uuid}})
+			DETACH DELETE mc`,
+			Parameters: map[string]interface{}{
+				"uuid": extraRelThingUUID,
+			},
 		},
 	}
 
@@ -170,7 +203,7 @@ func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
 	checkGraph := neoism.CypherQuery{
 		Statement: `MATCH (n:Thing) WHERE n.uuid in {uuids} RETURN n.uuid`,
 		Parameters: neoism.Props{
-			"uuids": []string{uuid},
+			"uuids": []string{ccUUID},
 		},
 		Result: &result,
 	}
