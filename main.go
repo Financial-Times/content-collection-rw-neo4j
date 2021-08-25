@@ -9,9 +9,9 @@ import (
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1_1"
-	"github.com/Financial-Times/neo-utils-go/neoutils"
+	cli "github.com/jawher/mow.cli"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	log "github.com/sirupsen/logrus"
-	"github.com/jawher/mow.cli"
 )
 
 var appDescription = "A RESTful API for managing Content Collections in neo4j"
@@ -47,30 +47,29 @@ func main() {
 		EnvVar: "APP_PORT",
 	})
 
-	batchSize := app.Int(cli.IntOpt{
-		Name:   "batchSize",
-		Value:  1024,
-		Desc:   "Maximum number of statements to execute per batch",
-		EnvVar: "BATCH_SIZE",
-	})
-
 	app.Action = func() {
-		conf := neoutils.DefaultConnectionConfig()
-		conf.BatchSize = *batchSize
-		db, err := neoutils.Connect(*neoURL, conf)
+		driver, err := neo4j.NewDriver(*neoURL, neo4j.NoAuth())
 		if err != nil {
-			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
+			log.Fatalf("Could not create a new instance of neo4j driver: %s", err)
 		}
+		defer func() {
+			err := driver.Close()
+			if err != nil {
+				log.Errorf("failed to close neo4j driver: %s", err)
+			}
+		}()
 
 		spServiceUrl := "content-collection/story-package"
 		cpServiceUrl := "content-collection/content-package"
 		services := map[string]baseftrwapp.Service{
-			spServiceUrl: collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS", "IS_CURATED_FOR"),
-			cpServiceUrl: collection.NewContentCollectionService(db, []string{}, "CONTAINS", ""),
+			spServiceUrl: collection.NewContentCollectionService(driver, []string{"Curation", "StoryPackage"}, "SELECTS", "IS_CURATED_FOR"),
+			cpServiceUrl: collection.NewContentCollectionService(driver, []string{}, "CONTAINS", ""),
 		}
 
 		for _, service := range services {
-			service.Initialise()
+			if err := service.Initialise(); err != nil {
+				log.Fatalf("could not initialise cc service: %s", err)
+			}
 		}
 
 		checks := []v1_1.Check{checkNeo4J(services[spServiceUrl], spServiceUrl), checkNeo4J(services[cpServiceUrl], cpServiceUrl)}

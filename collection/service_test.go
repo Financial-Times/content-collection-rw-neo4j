@@ -1,12 +1,13 @@
 package collection
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/Financial-Times/neo-utils-go/neoutils"
-	"github.com/jmcvetta/neoism"
+	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
+	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,11 +23,12 @@ var (
 
 func TestWrite(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, spLabels, spRelation, "")
-	defer cleanDB(db, assert)
+	driver := getDriverAndCheckClean(t, assert)
+	testService, err := getContentCollectionService(driver, spLabels, spRelation, "")
+	assert.NoError(err, "could not get new ccService")
+	defer cleanDB(driver, assert)
 
-	err := testService.Write(createContentCollection(2), "tID")
+	err = testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
 	result, found, err := testService.Read(ccUUID, "tID")
@@ -35,11 +37,12 @@ func TestWrite(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, spLabels, spRelation, "")
-	defer cleanDB(db, assert)
+	driver := getDriverAndCheckClean(t, assert)
+	testService, err := getContentCollectionService(driver, spLabels, spRelation, "")
+	assert.NoError(err, "could not get new ccService")
+	defer cleanDB(driver, assert)
 
-	err := testService.Write(createContentCollection(2), "tID")
+	err = testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
 	result, found, err := testService.Read(ccUUID, "tID")
@@ -54,11 +57,12 @@ func TestUpdate(t *testing.T) {
 
 func TestDeleteSP(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, spLabels, spRelation, "")
-	defer cleanDB(db, assert)
+	driver := getDriverAndCheckClean(t, assert)
+	testService, err := getContentCollectionService(driver, spLabels, spRelation, "")
+	assert.NoError(err, "could not get new ccService")
+	defer cleanDB(driver, assert)
 
-	err := testService.Write(createContentCollection(2), "tID")
+	err = testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
 	result, found, err := testService.Read(ccUUID, "tID")
@@ -76,11 +80,12 @@ func TestDeleteSP(t *testing.T) {
 
 func TestDeleteCP(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, cpLabels, cpRelation, "")
-	defer cleanDB(db, assert)
+	driver := getDriverAndCheckClean(t, assert)
+	testService, err := getContentCollectionService(driver, cpLabels, cpRelation, "")
+	assert.NoError(err, "could not get new ccService")
+	defer cleanDB(driver, assert)
 
-	err := testService.Write(createContentCollection(2), "tID")
+	err = testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
 	result, found, err := testService.Read(ccUUID, "tID")
@@ -98,18 +103,20 @@ func TestDeleteCP(t *testing.T) {
 
 func TestDeleteWithExtraRelation(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testServiceNoExtraRelHandle := getContentCollectionService(db, spLabels, spRelation, "")
-	testServiceExtraRelHandle := getContentCollectionService(db, spLabels, spRelation, extraRelForDelete)
-	defer cleanDB(db, assert)
+	driver := getDriverAndCheckClean(t, assert)
+	testServiceNoExtraRelHandle, err := getContentCollectionService(driver, spLabels, spRelation, "")
+	assert.NoError(err, "could not get new ccService")
+	testServiceExtraRelHandle, err := getContentCollectionService(driver, spLabels, spRelation, extraRelForDelete)
+	assert.NoError(err, "could not get new ccService with extraRelForDelete")
+	defer cleanDB(driver, assert)
 
-	err := testServiceNoExtraRelHandle.Write(createContentCollection(2), "tID")
+	err = testServiceNoExtraRelHandle.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
 	result, found, err := testServiceNoExtraRelHandle.Read(ccUUID, "tID")
 	validateResult(assert, result, found, err, 2)
 
-	err = createExtraRelation(db, ccUUID)
+	err = createExtraRelation(driver, ccUUID)
 	assert.NoError(err)
 
 	deleted, err := testServiceNoExtraRelHandle.Delete(ccUUID, "tID")
@@ -151,98 +158,104 @@ func validateResult(assert *assert.Assertions, result interface{}, found bool, e
 	assert.Equal(itemCount, len(collection.Items))
 }
 
-func getDatabaseConnectionAndCheckClean(t *testing.T, assert *assert.Assertions) neoutils.NeoConnection {
-	db := getDatabaseConnection(assert)
-	cleanDB(db, assert)
-	checkDbClean(db, t)
-	return db
-}
-
-func getDatabaseConnection(assert *assert.Assertions) neoutils.NeoConnection {
+func getDriverAndCheckClean(t *testing.T, assert *assert.Assertions) neo4j.Driver {
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
-		url = "http://localhost:7474/db/data"
+		url = "bolt://localhost:7687"
 	}
-
-	conf := neoutils.DefaultConnectionConfig()
-	conf.Transactional = false
-	db, err := neoutils.Connect(url, conf)
-	assert.NoError(err, "Failed to connect to Neo4j")
-	return db
+	driver, err := neo4j.NewDriver(url, neo4j.NoAuth())
+	assert.NoError(err, "Failed to create a new neo4j driver")
+	cleanDB(driver, assert)
+	checkDBClean(driver, assert)
+	return driver
 }
 
-func cleanDB(db neoutils.CypherRunner, assert *assert.Assertions) {
-	qs := []*neoism.CypherQuery{
-		{
-			Statement: `MATCH (mc:Thing {uuid: {uuid}})
-			DETACH DELETE mc`,
-			Parameters: map[string]interface{}{
-				"uuid": ccUUID,
-			},
-		},
-		{
-			Statement: `MATCH (mc:Thing {uuid: {uuid}})
-			DETACH DELETE mc`,
-			Parameters: map[string]interface{}{
-				"uuid": extraRelThingUUID,
-			},
-		},
-	}
+func cleanDB(driver neo4j.Driver, assert *assert.Assertions) {
+	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer session.Close()
+	_, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
+		_, err := tx.Run(
+			`MATCH (mc:Thing) WHERE mc.uuid IN {uuids} DETACH DELETE mc`,
+			map[string]interface{}{
+				"uuids": []string{ccUUID, extraRelThingUUID},
+			})
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil
+	})
+	assert.NoError(err, "Could not clean database")
+}
 
-	err := db.CypherBatch(qs)
+func checkDBClean(driver neo4j.Driver, assert *assert.Assertions) {
+	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer session.Close()
+	responseNotEmptyErr := errors.New("the query was not expected to return any results")
+	_, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
+		result, err := tx.Run(
+			`MATCH (n:Thing) WHERE n.uuid in {uuids} RETURN n.uuid`,
+			map[string]interface{}{
+				"uuids": []string{ccUUID},
+			})
+		if err != nil {
+			return nil, err
+		}
+		records, err := result.Collect()
+		if err != nil {
+			return nil, err
+		}
+		if len(records) != 0 {
+			return nil, responseNotEmptyErr
+		}
+		return nil, nil
+	})
 	assert.NoError(err)
 }
 
-func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
-	assert := assert.New(t)
-
-	result := []struct {
-		Uuid string `json:"uuid"`
-	}{}
-
-	checkGraph := neoism.CypherQuery{
-		Statement: `MATCH (n:Thing) WHERE n.uuid in {uuids} RETURN n.uuid`,
-		Parameters: neoism.Props{
-			"uuids": []string{ccUUID},
-		},
-		Result: &result,
+func getContentCollectionService(driver neo4j.Driver, labels []string, relation string, extraRelForDelete string) (baseftrwapp.Service, error) {
+	s := NewContentCollectionService(driver, labels, relation, extraRelForDelete)
+	err := s.Initialise()
+	if err != nil {
+		return nil, err
 	}
-	err := db.CypherBatch([]*neoism.CypherQuery{&checkGraph})
-	assert.NoError(err)
-	assert.Empty(result)
+	return s, nil
 }
 
-func getContentCollectionService(db neoutils.NeoConnection, labels []string, relation string, extraRelForDelete string) service {
-	s := NewContentCollectionService(db, labels, relation, extraRelForDelete)
-	s.Initialise()
-	return s
-}
+func createExtraRelation(driver neo4j.Driver, ccUUID string) error {
+	session := driver.NewSession(neo4j.SessionConfig{AccessMode: neo4j.AccessModeWrite})
+	defer session.Close()
+	tx, err := session.BeginTransaction()
+	if err != nil {
+		return fmt.Errorf("failed to begin a new transaction: %w", err)
+	}
+	defer tx.Close()
 
-func createExtraRelation(cypherRunner neoutils.NeoConnection, ccUUID string) error {
+	cypher := fmt.Sprint(`MERGE (n:Thing {uuid: {uuid}}) set n={allprops}`)
 	params := map[string]interface{}{
 		"uuid": extraRelThingUUID,
-	}
-
-	extraRelThingQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprint(`MERGE (n:Thing {uuid: {uuid}})
-		    set n={allprops}`),
-		Parameters: map[string]interface{}{
-			"uuid":     extraRelThingUUID,
-			"allprops": params,
+		"allprops": map[string]interface{}{
+			"uuid": extraRelThingUUID,
 		},
 	}
+	err = runCypherInTx(tx, cypher, params, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create a new node, reverting transaction: %w", err)
+	}
 
-	extraRelQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (cc:Thing {uuid:{ccUuid}})
+	cypher = fmt.Sprintf(`MATCH (cc:Thing {uuid:{ccUuid}})
 			MERGE (content:Thing {uuid: {thingUuid}})
-			MERGE (cc)-[rel:%s]->(content)`, extraRelForDelete),
-		Parameters: map[string]interface{}{
-			"ccUuid":    ccUUID,
-			"thingUuid": extraRelThingUUID,
-		},
+			MERGE (cc)-[rel:%s]->(content)`, extraRelForDelete)
+	params = map[string]interface{}{
+		"ccUuid":    ccUUID,
+		"thingUuid": extraRelThingUUID,
 	}
-
-	queries := []*neoism.CypherQuery{extraRelThingQuery, extraRelQuery}
-
-	return cypherRunner.CypherBatch(queries)
+	err = runCypherInTx(tx, cypher, params, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create a new extra relation, reverting transaction: %w", err)
+	}
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit transaction for creating a new extra relation failed: %w", err)
+	}
+	return nil
 }
