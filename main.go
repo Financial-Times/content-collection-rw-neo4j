@@ -9,9 +9,9 @@ import (
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1_1"
+	logger "github.com/Financial-Times/go-logger/v2"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	log "github.com/sirupsen/logrus"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 )
 
 var appDescription = "A RESTful API for managing Content Collections in neo4j"
@@ -54,12 +54,21 @@ func main() {
 		EnvVar: "BATCH_SIZE",
 	})
 
+	log := logger.NewUPPInfoLogger(*appName)
+	log.WithFields(map[string]interface{}{
+		"appName":       *appName,
+		"appSystemCode": *appSystemCode,
+		"neoURL":        *neoURL,
+		"port":          *port,
+		"batchSize":     *batchSize,
+	}).Info("Application staring...")
+
 	app.Action = func() {
 		conf := neoutils.DefaultConnectionConfig()
 		conf.BatchSize = *batchSize
 		db, err := neoutils.Connect(*neoURL, conf)
 		if err != nil {
-			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
+			log.WithError(err).Error("Could not connect to neo4j")
 		}
 
 		spServiceUrl := "content-collection/story-package"
@@ -93,8 +102,6 @@ func main() {
 		})
 	}
 
-	log.SetLevel(log.InfoLevel)
-	log.Infof("Application started with args %s", os.Args)
 	app.Run(os.Args)
 }
 
