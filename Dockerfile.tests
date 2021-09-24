@@ -1,6 +1,6 @@
 FROM golang:1
 
-ENV PROJECT=annotations-rw-neo4j
+ENV PROJECT=content-collection-rw-neo4j
 ENV ORG_PATH="github.com/Financial-Times"
 ENV SRC_FOLDER="${GOPATH}/src/${ORG_PATH}/${PROJECT}"
 

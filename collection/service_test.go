@@ -1,13 +1,16 @@
 package collection
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/Financial-Times/neo-utils-go/neoutils"
-	"github.com/jmcvetta/neoism"
+	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
+	cmneo4j "github.com/Financial-Times/cm-neo4j-driver"
 	"github.com/stretchr/testify/assert"
+
+	logger "github.com/Financial-Times/go-logger/v2"
 )
 
 var (
@@ -22,9 +25,9 @@ var (
 
 func TestWrite(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, spLabels, spRelation, "")
-	defer cleanDB(db, assert)
+	d := getDriverAndCheckClean(t, assert)
+	testService := getContentCollectionService(t, d, spLabels, spRelation, "")
+	defer cleanDB(d, assert)
 
 	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
@@ -35,9 +38,9 @@ func TestWrite(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, spLabels, spRelation, "")
-	defer cleanDB(db, assert)
+	d := getDriverAndCheckClean(t, assert)
+	testService := getContentCollectionService(t, d, spLabels, spRelation, "")
+	defer cleanDB(d, assert)
 
 	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
@@ -54,9 +57,9 @@ func TestUpdate(t *testing.T) {
 
 func TestDeleteSP(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, spLabels, spRelation, "")
-	defer cleanDB(db, assert)
+	d := getDriverAndCheckClean(t, assert)
+	testService := getContentCollectionService(t, d, spLabels, spRelation, "")
+	defer cleanDB(d, assert)
 
 	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
@@ -76,9 +79,9 @@ func TestDeleteSP(t *testing.T) {
 
 func TestDeleteCP(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, cpLabels, cpRelation, "")
-	defer cleanDB(db, assert)
+	d := getDriverAndCheckClean(t, assert)
+	testService := getContentCollectionService(t, d, cpLabels, cpRelation, "")
+	defer cleanDB(d, assert)
 
 	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
@@ -98,10 +101,10 @@ func TestDeleteCP(t *testing.T) {
 
 func TestDeleteWithExtraRelation(t *testing.T) {
 	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testServiceNoExtraRelHandle := getContentCollectionService(db, spLabels, spRelation, "")
-	testServiceExtraRelHandle := getContentCollectionService(db, spLabels, spRelation, extraRelForDelete)
-	defer cleanDB(db, assert)
+	d := getDriverAndCheckClean(t, assert)
+	testServiceNoExtraRelHandle := getContentCollectionService(t, d, spLabels, spRelation, "")
+	testServiceExtraRelHandle := getContentCollectionService(t, d, spLabels, spRelation, extraRelForDelete)
+	defer cleanDB(d, assert)
 
 	err := testServiceNoExtraRelHandle.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
@@ -109,7 +112,7 @@ func TestDeleteWithExtraRelation(t *testing.T) {
 	result, found, err := testServiceNoExtraRelHandle.Read(ccUUID, "tID")
 	validateResult(assert, result, found, err, 2)
 
-	err = createExtraRelation(db, ccUUID)
+	err = createExtraRelation(d, ccUUID)
 	assert.NoError(err)
 
 	deleted, err := testServiceNoExtraRelHandle.Delete(ccUUID, "tID")
@@ -151,98 +154,105 @@ func validateResult(assert *assert.Assertions, result interface{}, found bool, e
 	assert.Equal(itemCount, len(collection.Items))
 }
 
-func getDatabaseConnectionAndCheckClean(t *testing.T, assert *assert.Assertions) neoutils.NeoConnection {
-	db := getDatabaseConnection(assert)
-	cleanDB(db, assert)
-	checkDbClean(db, t)
-	return db
+func getDriverAndCheckClean(t *testing.T, assert *assert.Assertions) *cmneo4j.Driver {
+	d := getNeoDriver(assert)
+	cleanDB(d, assert)
+	checkDBClean(d, t)
+	return d
 }
 
-func getDatabaseConnection(assert *assert.Assertions) neoutils.NeoConnection {
+func getNeoDriver(assert *assert.Assertions) *cmneo4j.Driver {
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
-		url = "http://localhost:7474/db/data"
+		url = "bolt://localhost:7687"
 	}
 
-	conf := neoutils.DefaultConnectionConfig()
-	conf.Transactional = false
-	db, err := neoutils.Connect(url, conf)
+	log := logger.NewUPPLogger("cc-rw-neo4j-tests", "INFO")
+	d, err := cmneo4j.NewDefaultDriver(url, log)
 	assert.NoError(err, "Failed to connect to Neo4j")
-	return db
+
+	return d
 }
 
-func cleanDB(db neoutils.CypherRunner, assert *assert.Assertions) {
-	qs := []*neoism.CypherQuery{
+func cleanDB(d *cmneo4j.Driver, assert *assert.Assertions) {
+	qs := []*cmneo4j.Query{
 		{
-			Statement: `MATCH (mc:Thing {uuid: {uuid}})
+			Cypher: `MATCH (mc:Thing {uuid: $uuid})
 			DETACH DELETE mc`,
-			Parameters: map[string]interface{}{
+			Params: map[string]interface{}{
 				"uuid": ccUUID,
 			},
 		},
 		{
-			Statement: `MATCH (mc:Thing {uuid: {uuid}})
+			Cypher: `MATCH (mc:Thing {uuid: $uuid})
 			DETACH DELETE mc`,
-			Parameters: map[string]interface{}{
+			Params: map[string]interface{}{
 				"uuid": extraRelThingUUID,
 			},
 		},
 	}
 
-	err := db.CypherBatch(qs)
+	err := d.Write(qs...)
 	assert.NoError(err)
 }
 
-func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
+func checkDBClean(d *cmneo4j.Driver, t *testing.T) {
 	assert := assert.New(t)
 
 	result := []struct {
-		Uuid string `json:"uuid"`
+		UUID string `json:"uuid"`
 	}{}
 
-	checkGraph := neoism.CypherQuery{
-		Statement: `MATCH (n:Thing) WHERE n.uuid in {uuids} RETURN n.uuid`,
-		Parameters: neoism.Props{
+	checkGraph := &cmneo4j.Query{
+		Cypher: `MATCH (n:Thing) WHERE n.uuid in $uuids RETURN n.uuid`,
+		Params: map[string]interface{}{
 			"uuids": []string{ccUUID},
 		},
 		Result: &result,
 	}
-	err := db.CypherBatch([]*neoism.CypherQuery{&checkGraph})
-	assert.NoError(err)
-	assert.Empty(result)
+	err := d.Read(checkGraph)
+	if errors.Is(err, cmneo4j.ErrNoResultsFound) {
+		assert.Empty(result)
+	} else {
+		assert.NoError(err)
+	}
 }
 
-func getContentCollectionService(db neoutils.NeoConnection, labels []string, relation string, extraRelForDelete string) service {
-	s := NewContentCollectionService(db, labels, relation, extraRelForDelete)
-	s.Initialise()
+func getContentCollectionService(t *testing.T, d *cmneo4j.Driver, labels []string, rel, extraRelForDelete string) baseftrwapp.Service {
+	assert := assert.New(t)
+
+	s := NewContentCollectionService(d, labels, rel, extraRelForDelete)
+	err := s.Initialise()
+	if errors.Is(err, cmneo4j.ErrNeo4jVersionNotSupported) {
+		return s
+	}
+
+	assert.NoError(err)
 	return s
 }
 
-func createExtraRelation(cypherRunner neoutils.NeoConnection, ccUUID string) error {
+func createExtraRelation(d *cmneo4j.Driver, ccUUID string) error {
 	params := map[string]interface{}{
 		"uuid": extraRelThingUUID,
 	}
 
-	extraRelThingQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprint(`MERGE (n:Thing {uuid: {uuid}})
-		    set n={allprops}`),
-		Parameters: map[string]interface{}{
+	extraRelThingQuery := &cmneo4j.Query{
+		Cypher: `MERGE (n:Thing {uuid: $uuid}) set n=$allprops`,
+		Params: map[string]interface{}{
 			"uuid":     extraRelThingUUID,
 			"allprops": params,
 		},
 	}
 
-	extraRelQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (cc:Thing {uuid:{ccUuid}})
-			MERGE (content:Thing {uuid: {thingUuid}})
+	extraRelQuery := &cmneo4j.Query{
+		Cypher: fmt.Sprintf(`MATCH (cc:Thing {uuid:$ccUuid})
+			MERGE (content:Thing {uuid: $thingUuid})
 			MERGE (cc)-[rel:%s]->(content)`, extraRelForDelete),
-		Parameters: map[string]interface{}{
+		Params: map[string]interface{}{
 			"ccUuid":    ccUUID,
 			"thingUuid": extraRelThingUUID,
 		},
 	}
 
-	queries := []*neoism.CypherQuery{extraRelThingQuery, extraRelQuery}
-
-	return cypherRunner.CypherBatch(queries)
+	return d.Write(extraRelThingQuery, extraRelQuery)
 }
