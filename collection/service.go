@@ -101,6 +101,7 @@ func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) 
 func (pcd service) Write(newThing interface{}, transID string) error {
 	newContentCollection := newThing.(contentCollection)
 
+	// nolint:gosec
 	deleteRelationshipsQuery := &cmneo4j.Query{
 		Cypher: fmt.Sprintf(`MATCH (n:%s {uuid: $uuid})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
@@ -137,6 +138,7 @@ func (pcd service) Write(newThing interface{}, transID string) error {
 }
 
 func addCollectionItemQuery(joinedLabels, relation, contentCollectionUUID, itemUUID string, order int) *cmneo4j.Query {
+	// nolint:gosec
 	return &cmneo4j.Query{
 		Cypher: fmt.Sprintf(`MATCH (n:%s {uuid:$contentCollectionUuid})
 			MERGE (content:Thing {uuid: $contentUuid})
@@ -156,6 +158,7 @@ func (pcd service) Delete(uuid string, transID string) (bool, error) {
 		relsToDelete = fmt.Sprintf("%s|%s", pcd.relation, pcd.extraRelForDelete)
 	}
 
+	// nolint:gosec
 	removeRelationships := &cmneo4j.Query{
 		Cypher: fmt.Sprintf(`MATCH (cc:Thing {uuid: $uuid})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(cc)
