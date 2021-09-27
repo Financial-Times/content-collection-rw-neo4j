@@ -26,6 +26,8 @@ var (
 func TestWrite(t *testing.T) {
 	assert := assert.New(t)
 	d := getDriverAndCheckClean(t, assert)
+	defer d.Close()
+
 	testService := getContentCollectionService(t, d, spLabels, spRelation, "")
 	defer cleanDB(d, assert)
 
@@ -39,6 +41,8 @@ func TestWrite(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	d := getDriverAndCheckClean(t, assert)
+	defer d.Close()
+
 	testService := getContentCollectionService(t, d, spLabels, spRelation, "")
 	defer cleanDB(d, assert)
 
@@ -58,6 +62,8 @@ func TestUpdate(t *testing.T) {
 func TestDeleteSP(t *testing.T) {
 	assert := assert.New(t)
 	d := getDriverAndCheckClean(t, assert)
+	defer d.Close()
+
 	testService := getContentCollectionService(t, d, spLabels, spRelation, "")
 	defer cleanDB(d, assert)
 
@@ -80,6 +86,8 @@ func TestDeleteSP(t *testing.T) {
 func TestDeleteCP(t *testing.T) {
 	assert := assert.New(t)
 	d := getDriverAndCheckClean(t, assert)
+	defer d.Close()
+
 	testService := getContentCollectionService(t, d, cpLabels, cpRelation, "")
 	defer cleanDB(d, assert)
 
@@ -102,6 +110,8 @@ func TestDeleteCP(t *testing.T) {
 func TestDeleteWithExtraRelation(t *testing.T) {
 	assert := assert.New(t)
 	d := getDriverAndCheckClean(t, assert)
+	defer d.Close()
+
 	testServiceNoExtraRelHandle := getContentCollectionService(t, d, spLabels, spRelation, "")
 	testServiceExtraRelHandle := getContentCollectionService(t, d, spLabels, spRelation, extraRelForDelete)
 	defer cleanDB(d, assert)

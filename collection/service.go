@@ -79,7 +79,7 @@ func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) 
 		return contentCollection{}, false, nil
 	}
 	if err != nil {
-		return contentCollection{}, false, nil
+		return contentCollection{}, false, err
 	}
 
 	result := results[0]
