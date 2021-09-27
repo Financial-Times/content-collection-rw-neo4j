@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	cmneo4j "github.com/Financial-Times/cm-neo4j-driver"
 )
 
 var defaultLabels = []string{"ContentCollection"}
 
-type service struct {
+type Service struct {
 	driver            *cmneo4j.Driver
 	joinedLabels      string
 	relation          string
@@ -21,11 +20,11 @@ type service struct {
 
 // NewContentCollectionService returns an implementation of rwapi.Service interface
 // defined in github.com/Financial-Times/up-rw-app-api-go
-func NewContentCollectionService(d *cmneo4j.Driver, labels []string, rel, extraRelForDelete string) baseftrwapp.Service {
+func NewContentCollectionService(d *cmneo4j.Driver, labels []string, rel, extraRelForDelete string) Service {
 	labels = append(defaultLabels, labels...)
 	joinedLabels := strings.Join(labels, ":")
 
-	return service{
+	return Service{
 		driver:            d,
 		joinedLabels:      joinedLabels,
 		relation:          rel,
@@ -36,7 +35,7 @@ func NewContentCollectionService(d *cmneo4j.Driver, labels []string, rel, extraR
 // Initialise is invoked right after NewContentCollectionService and it makes
 // sure that the database has Constraints on "uuid" field for the labels passed
 // in NewContentCollectionService
-func (pcd service) Initialise() error {
+func (pcd Service) Initialise() error {
 	labels := strings.Split(pcd.joinedLabels, ":")
 
 	constraintMap := map[string]string{}
@@ -48,12 +47,12 @@ func (pcd service) Initialise() error {
 }
 
 // Check feeds into the Healthcheck and checks whether we can connect to Neo
-func (pcd service) Check() error {
+func (pcd Service) Check() error {
 	return pcd.driver.VerifyConnectivity()
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) {
+func (pcd Service) Read(uuid string, transID string) (interface{}, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
@@ -98,7 +97,7 @@ func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) 
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(newThing interface{}, transID string) error {
+func (pcd Service) Write(newThing interface{}, transID string) error {
 	newContentCollection := newThing.(contentCollection)
 
 	// nolint:gosec
@@ -152,7 +151,7 @@ func addCollectionItemQuery(joinedLabels, relation, contentCollectionUUID, itemU
 }
 
 //Delete - Deletes a content collection
-func (pcd service) Delete(uuid string, transID string) (bool, error) {
+func (pcd Service) Delete(uuid string, transID string) (bool, error) {
 	relsToDelete := pcd.relation
 	if pcd.extraRelForDelete != "" {
 		relsToDelete = fmt.Sprintf("%s|%s", pcd.relation, pcd.extraRelForDelete)
@@ -202,7 +201,7 @@ func (pcd service) Delete(uuid string, transID string) (bool, error) {
 }
 
 // DecodeJSON - Decodes JSON into a content collection
-func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
+func (pcd Service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 	c := contentCollection{}
 	err := dec.Decode(&c)
 
@@ -210,7 +209,7 @@ func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 }
 
 // Count - Returns a count of the number of content in this Neo instance
-func (pcd service) Count() (int, error) {
+func (pcd Service) Count() (int, error) {
 	results := []struct {
 		Count int `json:"c"`
 	}{}

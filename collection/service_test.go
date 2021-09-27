@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	cmneo4j "github.com/Financial-Times/cm-neo4j-driver"
 	"github.com/stretchr/testify/assert"
 
@@ -228,7 +227,7 @@ func checkDBClean(d *cmneo4j.Driver, t *testing.T) {
 	}
 }
 
-func getContentCollectionService(t *testing.T, d *cmneo4j.Driver, labels []string, rel, extraRelForDelete string) baseftrwapp.Service {
+func getContentCollectionService(t *testing.T, d *cmneo4j.Driver, labels []string, rel, extraRelForDelete string) Service {
 	assert := assert.New(t)
 
 	s := NewContentCollectionService(d, labels, rel, extraRelForDelete)
