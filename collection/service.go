@@ -43,7 +43,15 @@ func (pcd Service) Initialise() error {
 		constraintMap[label] = "uuid"
 	}
 
-	return pcd.driver.EnsureConstraints(constraintMap)
+	err := pcd.driver.EnsureConstraints(constraintMap)
+
+	// We are ignoring ErrNeo4jVersionNotSupported because the service is expected
+	// to work with Neo4j v4 and if it's working Neo4j v3.x we are expecting that
+	// the required constraints are already created in Neo4j.
+	if errors.Is(err, cmneo4j.ErrNeo4jVersionNotSupported) {
+		return nil
+	}
+	return err
 }
 
 // Check feeds into the Healthcheck and checks whether we can connect to Neo

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 
 	"time"
@@ -76,20 +75,6 @@ func main() {
 		services := map[string]baseftrwapp.Service{
 			spServiceURL: collection.NewContentCollectionService(driver, []string{"Curation", "StoryPackage"}, "SELECTS", "IS_CURATED_FOR"),
 			cpServiceURL: collection.NewContentCollectionService(driver, []string{}, "CONTAINS", ""),
-		}
-
-		for svcURL, service := range services {
-			err := service.Initialise()
-			if err == nil {
-				continue
-			}
-
-			logEntry := log.WithError(err).WithField("serviceURL", svcURL)
-			if errors.Is(err, cmneo4j.ErrNeo4jVersionNotSupported) {
-				logEntry.Warn("Initializing service failed")
-			} else {
-				logEntry.Fatal("Initializing service failed")
-			}
 		}
 
 		checks := []v1_1.Check{checkNeo4J(services[spServiceURL], spServiceURL), checkNeo4J(services[cpServiceURL], cpServiceURL)}
