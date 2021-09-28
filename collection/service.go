@@ -184,7 +184,7 @@ func (pcd Service) Delete(uuid string, transID string) (bool, error) {
 	}
 
 	deleteNode := &cmneo4j.Query{
-		Cypher: `MATCH (cc:Thing {uuid: {uuid}})
+		Cypher: `MATCH (cc:Thing {uuid: $uuid})
 			OPTIONAL MATCH (cc)-[rel]-()
 			WITH cc, count(rel) AS relCount
 			WHERE relCount = 0
@@ -205,7 +205,7 @@ func (pcd Service) Delete(uuid string, transID string) (bool, error) {
 		return false, err
 	}
 
-	return s1.Counters().NodesDeleted() > 0, err
+	return s1.Counters().NodesDeleted() > 0, nil
 }
 
 // DecodeJSON - Decodes JSON into a content collection

@@ -35,7 +35,7 @@ func main() {
 
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neo-url",
-		Value:  "http://localhost:7474/db/data",
+		Value:  "bolt://localhost:7687",
 		Desc:   "neo4j endpoint URL",
 		EnvVar: "NEO_URL",
 	})
