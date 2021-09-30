@@ -1,7 +1,6 @@
 package main
 
 import (
-	_ "net/http/pprof"
 	"os"
 
 	"time"
@@ -9,9 +8,10 @@ import (
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1_1"
-	"github.com/Financial-Times/neo-utils-go/neoutils"
-	log "github.com/sirupsen/logrus"
-	"github.com/jawher/mow.cli"
+	logger "github.com/Financial-Times/go-logger/v2"
+	cli "github.com/jawher/mow.cli"
+
+	cmneo4j "github.com/Financial-Times/cm-neo4j-driver"
 )
 
 var appDescription = "A RESTful API for managing Content Collections in neo4j"
@@ -35,7 +35,7 @@ func main() {
 
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neo-url",
-		Value:  "http://localhost:7474/db/data",
+		Value:  "bolt://localhost:7687",
 		Desc:   "neo4j endpoint URL",
 		EnvVar: "NEO_URL",
 	})
@@ -54,26 +54,30 @@ func main() {
 		EnvVar: "BATCH_SIZE",
 	})
 
+	log := logger.NewUPPInfoLogger(*appName)
+	log.WithFields(map[string]interface{}{
+		"appName":       *appName,
+		"appSystemCode": *appSystemCode,
+		"neoURL":        *neoURL,
+		"port":          *port,
+		"batchSize":     *batchSize,
+	}).Info("Application staring...")
+
 	app.Action = func() {
-		conf := neoutils.DefaultConnectionConfig()
-		conf.BatchSize = *batchSize
-		db, err := neoutils.Connect(*neoURL, conf)
+		driver, err := cmneo4j.NewDefaultDriver(*neoURL, log)
 		if err != nil {
-			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
+			log.WithError(err).Fatal("Could not create a new instance of cmneo4j driver")
 		}
+		defer driver.Close()
 
-		spServiceUrl := "content-collection/story-package"
-		cpServiceUrl := "content-collection/content-package"
+		spServiceURL := "content-collection/story-package"
+		cpServiceURL := "content-collection/content-package"
 		services := map[string]baseftrwapp.Service{
-			spServiceUrl: collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS", "IS_CURATED_FOR"),
-			cpServiceUrl: collection.NewContentCollectionService(db, []string{}, "CONTAINS", ""),
+			spServiceURL: collection.NewContentCollectionService(driver, []string{"Curation", "StoryPackage"}, "SELECTS", "IS_CURATED_FOR"),
+			cpServiceURL: collection.NewContentCollectionService(driver, []string{}, "CONTAINS", ""),
 		}
 
-		for _, service := range services {
-			service.Initialise()
-		}
-
-		checks := []v1_1.Check{checkNeo4J(services[spServiceUrl], spServiceUrl), checkNeo4J(services[cpServiceUrl], cpServiceUrl)}
+		checks := []v1_1.Check{checkNeo4J(services[spServiceURL], spServiceURL), checkNeo4J(services[cpServiceURL], cpServiceURL)}
 		hc := v1_1.TimedHealthCheck{
 			HealthCheck: v1_1.HealthCheck{
 				SystemCode:  *appSystemCode,
@@ -93,18 +97,19 @@ func main() {
 		})
 	}
 
-	log.SetLevel(log.InfoLevel)
-	log.Infof("Application started with args %s", os.Args)
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		log.WithError(err).Error("app.Run returned an error")
+	}
 }
 
-func checkNeo4J(service baseftrwapp.Service, serviceUrl string) v1_1.Check {
+func checkNeo4J(service baseftrwapp.Service, serviceURL string) v1_1.Check {
 	return v1_1.Check{
 		BusinessImpact:   "Cannot read/write content via this writer",
 		Name:             "Check connectivity to Neo4j",
 		PanicGuide:       "https://dewey.ft.com/upp-content-collection-rw-neo4j.html",
 		Severity:         1,
-		TechnicalSummary: "Service mapped on URL " + serviceUrl + " cannot connect to Neo4j",
+		TechnicalSummary: "Service mapped on URL " + serviceURL + " cannot connect to Neo4j",
 		Checker:          func() (string, error) { return "", service.Check() },
 	}
 }

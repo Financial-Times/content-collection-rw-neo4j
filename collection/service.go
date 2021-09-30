@@ -2,37 +2,40 @@ package collection
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/Financial-Times/neo-utils-go/neoutils"
-	"github.com/jmcvetta/neoism"
+	cmneo4j "github.com/Financial-Times/cm-neo4j-driver"
 )
 
 var defaultLabels = []string{"ContentCollection"}
 
-type service struct {
-	conn              neoutils.NeoConnection
+type Service struct {
+	driver            *cmneo4j.Driver
 	joinedLabels      string
 	relation          string
 	extraRelForDelete string
 }
 
-//instantiate service
-func NewContentCollectionService(cypherRunner neoutils.NeoConnection, labels []string, relation string, extraRelForDelete string) service {
+// NewContentCollectionService returns an implementation of rwapi.Service interface
+// defined in github.com/Financial-Times/up-rw-app-api-go
+func NewContentCollectionService(d *cmneo4j.Driver, labels []string, rel, extraRelForDelete string) Service {
 	labels = append(defaultLabels, labels...)
 	joinedLabels := strings.Join(labels, ":")
 
-	return service{
-		conn:              cypherRunner,
+	return Service{
+		driver:            d,
 		joinedLabels:      joinedLabels,
-		relation:          relation,
+		relation:          rel,
 		extraRelForDelete: extraRelForDelete,
 	}
 }
 
-//Initialise initialisation of the indexes
-func (pcd service) Initialise() error {
+// Initialise is invoked right after NewContentCollectionService and it makes
+// sure that the database has Constraints on "uuid" field for the labels passed
+// in NewContentCollectionService
+func (pcd Service) Initialise() error {
 	labels := strings.Split(pcd.joinedLabels, ":")
 
 	constraintMap := map[string]string{}
@@ -40,27 +43,30 @@ func (pcd service) Initialise() error {
 		constraintMap[label] = "uuid"
 	}
 
-	return pcd.conn.EnsureConstraints(constraintMap)
+	err := pcd.driver.EnsureConstraints(constraintMap)
+
+	// We are ignoring ErrNeo4jVersionNotSupported because the service is expected
+	// to work with Neo4j v4 and if it's working Neo4j v3.x we are expecting that
+	// the required constraints are already created in Neo4j.
+	if errors.Is(err, cmneo4j.ErrNeo4jVersionNotSupported) {
+		return nil
+	}
+	return err
 }
 
-// Check feeds into the Healthcheck and checks whether we can connect to Neo and that we are connected to the leader
-func (pcd service) Check() error {
-	writableErr := neoutils.CheckWritable(pcd.conn)
-	if writableErr != nil {
-		return writableErr
-	}
-
-	return neoutils.Check(pcd.conn)
+// Check feeds into the Healthcheck and checks whether we can connect to Neo
+func (pcd Service) Check() error {
+	return pcd.driver.VerifyConnectivity()
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) {
+func (pcd Service) Read(uuid string, transID string) (interface{}, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
 
-	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{uuid}})
+	query := &cmneo4j.Query{
+		Cypher: fmt.Sprintf(`MATCH (n:%s {uuid:$uuid})
 				OPTIONAL MATCH (n)-[rel:%s]->(t:Thing)
 				WITH n, rel, t
 				ORDER BY rel.order
@@ -68,20 +74,19 @@ func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) 
 					n.publishReference as publishReference,
 					n.lastModified as lastModified,
 					collect({uuid:t.uuid}) as items`, pcd.joinedLabels, pcd.relation),
-		Parameters: map[string]interface{}{
+		Params: map[string]interface{}{
 			"uuid": uuid,
 		},
 		Result: &results,
 	}
 
-	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{query})
+	err := pcd.driver.Read(query)
 
+	if errors.Is(err, cmneo4j.ErrNoResultsFound) {
+		return contentCollection{}, false, nil
+	}
 	if err != nil {
 		return contentCollection{}, false, err
-	}
-
-	if len(results) == 0 {
-		return contentCollection{}, false, nil
 	}
 
 	result := results[0]
@@ -100,14 +105,15 @@ func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) 
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(newThing interface{}, transID string) error {
+func (pcd Service) Write(newThing interface{}, transID string) error {
 	newContentCollection := newThing.(contentCollection)
 
-	deleteRelationshipsQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:%s {uuid: {uuid}})
+	// nolint:gosec
+	deleteRelationshipsQuery := &cmneo4j.Query{
+		Cypher: fmt.Sprintf(`MATCH (n:%s {uuid: $uuid})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
 			DELETE rel`, pcd.joinedLabels, pcd.relation),
-		Parameters: map[string]interface{}{
+		Params: map[string]interface{}{
 			"uuid": newContentCollection.UUID,
 		},
 	}
@@ -118,105 +124,92 @@ func (pcd service) Write(newThing interface{}, transID string) error {
 		"lastModified":     newContentCollection.LastModified,
 	}
 
-	writeContentCollectionQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MERGE (n:Thing {uuid: {uuid}})
-		    set n={allprops}
+	writeContentCollectionQuery := &cmneo4j.Query{
+		Cypher: fmt.Sprintf(`MERGE (n:Thing {uuid: $uuid})
+		    set n=$allprops
 		    set n:%s`, pcd.joinedLabels),
-		Parameters: map[string]interface{}{
+		Params: map[string]interface{}{
 			"uuid":     newContentCollection.UUID,
 			"allprops": params,
 		},
 	}
 
-	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
+	queries := []*cmneo4j.Query{deleteRelationshipsQuery, writeContentCollectionQuery}
 
 	for i, item := range newContentCollection.Items {
 		addItemQuery := addCollectionItemQuery(pcd.joinedLabels, pcd.relation, newContentCollection.UUID, item.UUID, i+1)
 		queries = append(queries, addItemQuery)
 	}
 
-	return pcd.conn.CypherBatch(queries)
+	return pcd.driver.Write(queries...)
 }
 
-func addCollectionItemQuery(joinedLabels string, relation string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
-	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{contentCollectionUuid}})
-			MERGE (content:Thing {uuid: {contentUuid}})
-			MERGE (n)-[rel:%s {order: {itemOrder}}]->(content)`, joinedLabels, relation),
-		Parameters: map[string]interface{}{
-			"contentCollectionUuid": contentCollectionUuid,
-			"contentUuid":           itemUuid,
+func addCollectionItemQuery(joinedLabels, relation, contentCollectionUUID, itemUUID string, order int) *cmneo4j.Query {
+	// nolint:gosec
+	return &cmneo4j.Query{
+		Cypher: fmt.Sprintf(`MATCH (n:%s {uuid:$contentCollectionUuid})
+			MERGE (content:Thing {uuid: $contentUuid})
+			MERGE (n)-[rel:%s {order: $itemOrder}]->(content)`, joinedLabels, relation),
+		Params: map[string]interface{}{
+			"contentCollectionUuid": contentCollectionUUID,
+			"contentUuid":           itemUUID,
 			"itemOrder":             order,
 		},
 	}
-
-	return query
 }
 
 //Delete - Deletes a content collection
-func (pcd service) Delete(uuid string, transID string) (bool, error) {
-	var queries []*neoism.CypherQuery
-
-	removeRelationships := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (cc:Thing {uuid: {uuid}})
-			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(cc)
-			DELETE rel`, pcd.relation),
-		Parameters: map[string]interface{}{
-			"uuid": uuid,
-		},
-	}
-	queries = append(queries, removeRelationships)
-
+func (pcd Service) Delete(uuid string, transID string) (bool, error) {
+	relsToDelete := pcd.relation
 	if pcd.extraRelForDelete != "" {
-		removeExtraRelationships := &neoism.CypherQuery{
-			Statement: fmt.Sprintf(`MATCH (cc:Thing {uuid: {uuid}})
-				OPTIONAL MATCH (t:Thing)<-[rel:%s]-(cc)
-				DELETE rel`, pcd.extraRelForDelete),
-			Parameters: map[string]interface{}{
-				"uuid": uuid,
-			},
-		}
-		queries = append(queries, removeExtraRelationships)
+		relsToDelete = fmt.Sprintf("%s|%s", pcd.relation, pcd.extraRelForDelete)
 	}
 
-	removeLabel := &neoism.CypherQuery{
-		Statement: `MATCH (cc:Thing {uuid: {uuid}})
-			REMOVE cc:ContentCollection`,
-		Parameters: map[string]interface{}{
+	// nolint:gosec
+	removeRelationships := &cmneo4j.Query{
+		Cypher: fmt.Sprintf(`MATCH (cc:Thing {uuid: $uuid})
+			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(cc)
+			DELETE rel`, relsToDelete),
+		Params: map[string]interface{}{
 			"uuid": uuid,
 		},
 	}
 
-	deleteNode := &neoism.CypherQuery{
-		Statement: `MATCH (cc:Thing {uuid: {uuid}})
+	removeLabel := &cmneo4j.Query{
+		Cypher: `MATCH (cc:Thing {uuid: $uuid})
+			REMOVE cc:ContentCollection`,
+		Params: map[string]interface{}{
+			"uuid": uuid,
+		},
+	}
+
+	deleteNode := &cmneo4j.Query{
+		Cypher: `MATCH (cc:Thing {uuid: $uuid})
 			OPTIONAL MATCH (cc)-[rel]-()
 			WITH cc, count(rel) AS relCount
 			WHERE relCount = 0
 			DELETE cc`,
-		Parameters: map[string]interface{}{
+		Params: map[string]interface{}{
 			"uuid": uuid,
 		},
-		IncludeStats: true,
+		IncludeSummary: true,
 	}
-	queries = append(queries, removeLabel, deleteNode)
 
-	_ = pcd.conn.CypherBatch(queries)
-
-	s1, err := deleteNode.Stats()
+	err := pcd.driver.Write(removeRelationships, removeLabel, deleteNode)
 	if err != nil {
 		return false, err
 	}
 
-	var deleted bool
-	if s1.NodesDeleted > 0 {
-		deleted = true
+	s1, err := deleteNode.Summary()
+	if err != nil {
+		return false, err
 	}
 
-	return deleted, err
+	return s1.Counters().NodesDeleted() > 0, nil
 }
 
 // DecodeJSON - Decodes JSON into a content collection
-func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
+func (pcd Service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 	c := contentCollection{}
 	err := dec.Decode(&c)
 
@@ -224,17 +217,20 @@ func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 }
 
 // Count - Returns a count of the number of content in this Neo instance
-func (pcd service) Count() (int, error) {
+func (pcd Service) Count() (int, error) {
 	results := []struct {
 		Count int `json:"c"`
 	}{}
 
-	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, pcd.joinedLabels),
-		Result:    &results,
+	query := &cmneo4j.Query{
+		Cypher: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, pcd.joinedLabels),
+		Result: &results,
 	}
 
-	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{query})
+	err := pcd.driver.Read(query)
+	if errors.Is(err, cmneo4j.ErrNoResultsFound) {
+		return 0, nil
+	}
 	if err != nil {
 		return 0, err
 	}

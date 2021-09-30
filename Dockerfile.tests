@@ -1,18 +1,21 @@
 FROM golang:1
 
-ENV PROJECT=annotations-rw-neo4j
+ENV PROJECT=content-collection-rw-neo4j
 ENV ORG_PATH="github.com/Financial-Times"
 ENV SRC_FOLDER="${GOPATH}/src/${ORG_PATH}/${PROJECT}"
+
+ARG GITHUB_USERNAME
+ARG GITHUB_TOKEN
 
 WORKDIR ${SRC_FOLDER}
 
 COPY . /${SRC_FOLDER}/
 
 RUN echo "Fetching dependencies..." \
+    && git config --global url."https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com".insteadOf "https://github.com" \
     && git clone https://github.com/vishnubob/wait-for-it.git \
     && cd wait-for-it \
-    && mv ./wait-for-it.sh ${SRC_FOLDER}
-
-
+    && mv ./wait-for-it.sh ${SRC_FOLDER} \
+    && go env -w GOPRIVATE=github.com/Financial-Times
 
 ENTRYPOINT ["./wait-for-it.sh", "neo4j:7474", "-t", "60", "--"]
