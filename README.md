@@ -104,17 +104,22 @@ The response is not json formatted, it is simply a number like `10` or `0`.
 ## How to test
 
 To run the full test suite of tests, you must have a running instance of neo4j.
-By default the application will look for the elasticsearch instance at <http://neo4j:7474/db/data>.
+By default the application will look for the neo4j instance at <bolt://neo4j:7687>.
 Otherwise you could specify a URL yourself as given by the example below:
 
 ```shell
-export NEO4J_TEST_URL=http://neo4j:7474/db/data
+export NEO4J_TEST_URL=bolt://neo4j:7475
 ```
 
 - Unit tests only: `go test -mod=readonly -race ./...`
+
+In order for the integration tests to execute you must provide GITHUB_USERNAME and
+GITHUB_TOKEN values, because the service is depending on internal repositories.
+
 - Unit and integration tests:
 
     ```shell
+    GITHUB_USERNAME="<user-name>" GITHUB_TOKEN="<personal-access-token>" \
     docker-compose -f docker-compose-tests.yml up -d --build && \
     docker logs -f test-runner && \
     docker-compose -f docker-compose-tests.yml down -v
