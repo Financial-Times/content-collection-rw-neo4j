@@ -5,7 +5,7 @@ import (
 
 	"time"
 
-	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
+	"github.com/Financial-Times/base-ft-rw-app-go/v2/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1_1"
 	logger "github.com/Financial-Times/go-logger/v2"
