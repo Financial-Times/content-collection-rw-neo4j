@@ -232,10 +232,6 @@ func getContentCollectionService(t *testing.T, d *cmneo4j.Driver, labels []strin
 
 	s := NewContentCollectionService(d, labels, rel, extraRelForDelete)
 	err := s.Initialise()
-	if errors.Is(err, cmneo4j.ErrNeo4jVersionNotSupported) {
-		return s
-	}
-
 	assert.NoError(err)
 	return s
 }
