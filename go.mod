@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/Financial-Times/base-ft-rw-app-go/v2 v2.0.0
-	github.com/Financial-Times/cm-neo4j-driver v0.0.1
+	github.com/Financial-Times/cm-neo4j-driver v1.1.0
 	github.com/Financial-Times/go-fthealth v0.0.0-20171204124831-1b007e2b37b7
 	github.com/Financial-Times/go-logger/v2 v2.0.1
 	github.com/jawher/mow.cli v0.0.0-20160919114549-660b9261e2c8

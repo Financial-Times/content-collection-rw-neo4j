@@ -2,8 +2,8 @@ github.com/Financial-Times/api-endpoint v1.0.0 h1:EhJfcVcrktPrweue6dCUQAYcEQiXwh
 github.com/Financial-Times/api-endpoint v1.0.0/go.mod h1:QrJsxP8uEZIPJZon+qhc+zO7H0634DpoqDI291i0Nag=
 github.com/Financial-Times/base-ft-rw-app-go/v2 v2.0.0 h1:OlPaFFRSzaZuB0Ta/j0htJFkQG54sFkw2WFhWHKqLiY=
 github.com/Financial-Times/base-ft-rw-app-go/v2 v2.0.0/go.mod h1:Td0/3sUrq7H7yHf86jcpVQ0LUvt5NWRUrRVjxgYIkAk=
-github.com/Financial-Times/cm-neo4j-driver v0.0.1 h1:AFD0V2LNHJaxhs2kNVc3BDRwnY6uv0hdyWbYk2eONZ0=
-github.com/Financial-Times/cm-neo4j-driver v0.0.1/go.mod h1:0q7rpnzwBxptooh2/cqd9xALfgNEgVF6JLEzw0ygIDQ=
+github.com/Financial-Times/cm-neo4j-driver v1.1.0 h1:9TZgyE7Vl8iuH0MRQlrVLkjzLFwIQsCn/td806WU7A8=
+github.com/Financial-Times/cm-neo4j-driver v1.1.0/go.mod h1:fQ77C8A+6I+ihwe6Ob8Y7sIzU3s/DTrjBZJGVQOeum0=
 github.com/Financial-Times/go-fthealth v0.0.0-20171204124831-1b007e2b37b7 h1:dkf1EOTiHXA2lG2EJuePEim6y0HEOPt0hcqsT/qUr/k=
 github.com/Financial-Times/go-fthealth v0.0.0-20171204124831-1b007e2b37b7/go.mod h1:gpAzq6W5rCheYlY32JOIxS/VjVcYHbC2PkMzQngHT9c=
 github.com/Financial-Times/go-logger/v2 v2.0.1 h1:iekEfSsUtlkg+YkXTZo+/fIN2VbZ2/3Hl9yolP3z5X8=

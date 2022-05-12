@@ -10,7 +10,7 @@ workflows:
           name: build-and-test-project
           executor-name:
             name: ft-golang-ci/default-with-neo4j
-            neo4j-image-version: 3.5.28-enterprise
+            neo4j-image-version: 4.3.10-enterprise
       - ft-golang-ci/docker-build:
           name: build-docker-image
           requires:
