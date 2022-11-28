@@ -1,6 +1,6 @@
 # Content Collection Reader/Writer for Neo4j (content-collection-rw-neo4j)
 
-[![Circle CI](https://circleci.com/gh/Financial-Times/content-collection-rw-Neo4j/tree/master.png?style=shield)](https://circleci.com/gh/Financial-Times/content-collection-rw-Neo4j/tree/master)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/Financial-Times/content-collection-rw-neo4j/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/Financial-Times/content-collection-rw-neo4j/tree/master)
 
 An API for reading/writing content collection entities into Neo4j.
 Expects the JSON supplied by the ingester.
