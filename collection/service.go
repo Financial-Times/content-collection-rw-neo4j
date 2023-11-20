@@ -67,6 +67,7 @@ func (pcd Service) Read(uuid string, transID string) (interface{}, bool, error) 
 				RETURN  n.uuid as uuid,
 					n.publishReference as publishReference,
 					n.lastModified as lastModified,
+					n.publication as publication,
 					collect({uuid:t.uuid}) as items`, pcd.joinedLabels, pcd.relation),
 		Params: map[string]interface{}{
 			"uuid": uuid,
@@ -93,12 +94,13 @@ func (pcd Service) Read(uuid string, transID string) (interface{}, bool, error) 
 		PublishReference: result.PublishReference,
 		LastModified:     result.LastModified,
 		Items:            result.Items,
+		Publication:      result.Publication,
 	}
 
 	return contentCollectionResult, true, nil
 }
 
-//Write - Writes a content collection node
+// Write - Writes a content collection node
 func (pcd Service) Write(newThing interface{}, transID string) error {
 	newContentCollection := newThing.(contentCollection)
 
@@ -116,6 +118,7 @@ func (pcd Service) Write(newThing interface{}, transID string) error {
 		"uuid":             newContentCollection.UUID,
 		"publishReference": newContentCollection.PublishReference,
 		"lastModified":     newContentCollection.LastModified,
+		"publication":      newContentCollection.Publication,
 	}
 
 	writeContentCollectionQuery := &cmneo4j.Query{
@@ -152,7 +155,7 @@ func addCollectionItemQuery(joinedLabels, relation, contentCollectionUUID, itemU
 	}
 }
 
-//Delete - Deletes a content collection
+// Delete - Deletes a content collection
 func (pcd Service) Delete(uuid string, transID string) (bool, error) {
 	relsToDelete := pcd.relation
 	if pcd.extraRelForDelete != "" {

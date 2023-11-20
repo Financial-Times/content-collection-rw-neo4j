@@ -148,6 +148,7 @@ func createContentCollection(itemCount int) contentCollection {
 		UUID:             ccUUID,
 		PublishReference: "test12345",
 		LastModified:     "2016-08-25T06:06:23.532Z",
+		Publication:      []string{"8e6c705e-1132-42a2-8db0-c295e29e8658"},
 		Items:            items,
 	}
 
@@ -161,6 +162,7 @@ func validateResult(assert *assert.Assertions, result interface{}, found bool, e
 	collection := result.(contentCollection)
 	assert.Equal(ccUUID, collection.UUID)
 	assert.Equal(itemCount, len(collection.Items))
+	assert.Equal([]string{"8e6c705e-1132-42a2-8db0-c295e29e8658"}, collection.Publication)
 }
 
 func getDriverAndCheckClean(t *testing.T, assert *assert.Assertions) *cmneo4j.Driver {
