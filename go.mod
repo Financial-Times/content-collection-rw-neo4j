@@ -1,6 +1,6 @@
 module github.com/Financial-Times/content-collection-rw-neo4j
 
-go 1.17
+go 1.22
 
 require (
 	github.com/Financial-Times/base-ft-rw-app-go/v2 v2.0.0
